@@ -1,0 +1,10 @@
+sudo: false
+language: node_js
+node_js: 10
+install:
+  - npm i -g codecov
+  - npm i -g rollup
+  - npm i
+script: 
+  - npm run build
+  - codecov

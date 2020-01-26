@@ -1,0 +1,67 @@
+{
+  "name": "jsms-ext-chromium",
+  "version": "1.1.0-beta.0",
+  "description": "JSMS extension for integration of Chromium Embedded Framework (CEF) clients.",
+  "scripts": {
+    "test": "jest --collect-coverage",
+    "build": "npm run clean && npm run compile && npm run lint && npm run test && npm run prepare-dist",
+    "clean": "rimraf ./dist/**/*",
+    "compile": "tsc",
+    "doc": "rimraf ./doc && typedoc --exclude \"+(node_modules|test|index.d.ts)\" --excludeNotExported --excludePrivate --excludeProtected --module commonjs --target ES6  --out ./doc .",
+    "prepare-dist": "npm run rollup && rimraf ./dist/test && rimraf ./dist/src/**/*.js && move-cli ./dist/src/ ./dist/types/ && cp-cli index.d.ts ./dist/index.d.ts ",
+    "format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
+    "lint": "tslint -p tsconfig.json",
+    "prepublishOnly": "npm run build",
+    "preversion": "npm run lint",
+    "postversion": "git push && git push --tags",
+    "rollup": "rollup -c",
+    "tsc": "tsc",
+    "tslint": "tslint",
+    "jest": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rfruesmer/jsms-ext-chromium.git"
+  },
+  "keywords": [
+    "event bus",
+    "mediator",
+    "messaging",
+    "message service",
+    "message queue",
+    "publish",
+    "subscribe"
+  ],
+  "author": "Reinhold Früsmer",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/rfruesmer/jsms-ext-chromium/issues"
+  },
+  "homepage": "https://github.com/rfruesmer/jsms-ext-chromium#readme",
+  "devDependencies": {
+    "@types/jest": "^24.0.18",
+    "cp-cli": "^2.0.0",
+    "jest": "^24.9.0",
+    "log4js": "^5.1.0",
+    "move-cli": "^1.2.1",
+    "prettier": "^1.18.2",
+    "rimraf": "^3.0.0",
+    "ts-jest": "^24.0.2",
+    "tslint": "^5.19.0",
+    "tslint-config-prettier": "^1.18.0",
+    "tslint-plugin-prettier": "^2.0.1",
+    "typescript": "^3.6.2"
+  },
+  "dependencies": {
+    "@log4js-node/log4js-api": "^1.0.2",
+    "jsms": "1.0.7",
+    "uuid": "^3.3.3"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "types": "dist/index.d.ts",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
+  "browser": "dist/index.umd.js"
+}

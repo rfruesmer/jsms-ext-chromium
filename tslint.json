@@ -1,0 +1,29 @@
+{
+    "defaultSeverity": "error",
+    "extends": [
+        "tslint:recommended", 
+        "tslint-plugin-prettier", 
+        "tslint-config-prettier"
+    ],
+    "jsRules": {},
+    "rules": {
+        "indent": [true, "spaces", 4],
+        "interface-name": false,
+        "max-classes-per-file": false,
+        "member-ordering": false,
+        "no-console": false,
+        "no-empty-interface": false,
+        "object-literal-sort-keys": false,
+        "one-line": [true, "check-open-brace", "check-whitespace"],
+        "ordered-imports": false,
+        "semicolon": [true, "always"],
+        "typedef": [true, "call-signature"],
+        "variable-name": {
+            "options": [
+                "allow-leading-underscore",
+                "check-format"
+            ]
+        }
+    },
+    "rulesDirectory": []
+}
