@@ -8,3 +8,27 @@
 
 [JSMS](https://github.com/rfruesmer/jsms/) extension for integration of [Chromium Embedded Framework (CEF)](https://bitbucket.org/chromiumembedded/cef/wiki/Home) clients.
 
+## Credits
+
+<table align="center">
+    <tr>
+        <td>@log4js-node/log4js-api</td>
+        <td align="right">
+            <a href="https://www.npmjs.com/package/@log4js-node/log4js-api">homepage</a>
+            &nbsp;-&nbsp;  
+            <a href="https://github.com/log4js-node/log4js-api/blob/master/LICENSE">show license</a>
+        </td>
+    </tr>
+    <tr>
+        <td>uuid </td>
+        <td align="right">
+            <a href="https://www.npmjs.com/package/uuid">homepage</a>
+            &nbsp;-&nbsp;  
+            <a href="https://github.com/kelektiv/node-uuid/blob/master/LICENSE.md">show license</a>
+        </td>
+    </tr>
+</table>
+
+## License
+
+MIT
