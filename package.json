@@ -33,6 +33,7 @@
     "subscribe",
     "chromium",
     "chromium embedded framework",
+    "cef",
     "cef message router"
   ],
   "author": "Reinhold Früsmer",
