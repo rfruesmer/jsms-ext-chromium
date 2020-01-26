@@ -30,7 +30,10 @@
     "message service",
     "message queue",
     "publish",
-    "subscribe"
+    "subscribe",
+    "chromium",
+    "chromium embedded framework",
+    "cef message router"
   ],
   "author": "Reinhold Früsmer",
   "license": "MIT",
