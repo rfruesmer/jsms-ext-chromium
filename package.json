@@ -46,6 +46,7 @@
     "@types/jest": "^24.0.18",
     "cp-cli": "^2.0.0",
     "jest": "^24.9.0",
+    "jsms": "1.0.10",
     "log4js": "^5.1.0",
     "move-cli": "^1.2.1",
     "prettier": "^1.18.2",
@@ -56,9 +57,11 @@
     "tslint-plugin-prettier": "^2.0.1",
     "typescript": "^3.6.2"
   },
+  "peerDependencies": {
+    "jsms": "1.0.10"
+  },
   "dependencies": {
     "@log4js-node/log4js-api": "^1.0.2",
-    "jsms": "1.0.7",
     "uuid": "^3.3.3"
   },
   "files": [
