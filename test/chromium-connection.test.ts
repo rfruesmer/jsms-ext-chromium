@@ -105,33 +105,33 @@ test("forwards messages from C++ to JS", () => {
 // --------------------------------------------------------------------------------------------------------------------
 
 test("forwards messages from JS to C++", async () => {
-    let actualMessage: JsmsMessage;
-    let expectedMessage: JsmsMessage;
-    let expectedSuccessResponse: JsmsMessage;
+    let actualRequest = JsmsMessage.create("", "");
+    const expectedRequest = JsmsMessage.create(QUEUE_NAME, "sample body");
+    const expectedResponse = JsmsMessage.createResponse(expectedRequest, "response body");
 
     givenDefaultChromiumConnectionForTesting();
 
     // given successful cefQuery function call
     globalNS.cefQuery = (query: any) => {
-        actualMessage = JsmsMessage.fromString(query.request);
-        expectedSuccessResponse = JsmsMessage.createResponse(actualMessage, "response body");
-        query.onSuccess(expectedSuccessResponse.toString());
+        actualRequest = JsmsMessage.fromString(query.request);
+        const response = JsmsMessage.createResponse(actualRequest, "response body");
+        query.onSuccess(response.toString());
     };
 
     // given some queue
     connection.createQueue(QUEUE_NAME);
 
     // when sending message to C++
-    expectedMessage = JsmsMessage.create(QUEUE_NAME, "sample body");
-    const deferred = connection.send(expectedMessage);
+    const deferred = connection.send(expectedRequest);
 
     // then message should be forwarded to C++
-    // @ts-ignore: "actualMessage possibly being undefined here" can be ignored for testing
-    expect(actualMessage).toEqual(expectedMessage);
+    expect(actualRequest).toEqual(expectedRequest);
 
-    // and the promise should be resolved
-    // @ts-ignore: "expectedSuccessResponse possibly being undefined here" can be ignored for testing
-    await expect(deferred.promise).resolves.toEqual(expectedSuccessResponse);
+    // and the promise should be resolved with the expected response
+    const actualResponse = await deferred.promise;
+    expect(actualResponse.header.destination).toEqual(expectedResponse.header.destination);
+    expect(actualResponse.header.correlationID).toEqual(expectedResponse.header.correlationID);
+    expect(actualResponse.body).toEqual(expectedResponse.body);
 
     // tear down
     connection.close();
