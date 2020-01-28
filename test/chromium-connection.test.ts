@@ -3,14 +3,17 @@ import { ChromiumConnection } from "../src/chromium-connection";
 import { getLogger } from "@log4js-node/log4js-api";
 
 const QUEUE_NAME = "/some/destination";
+const TOPIC_NAME = "/some/topic";
 const DEFAULT_TIME_TO_LIVE = 1000;
 const DEFAULT_RESPONSE_DELAY = 500;
 const expectedRequestBody = {request: "PING"};
 const expectedResponseBody = {response: "PONG"};
-const expectedErrorMessage = "some error message";
 
 let messageService: JsmsService;
+let globalNS: any;
 let connection: ChromiumConnection;
+
+const expectedErrorMessage = "some error message";
 
 // --------------------------------------------------------------------------------------------------------------------
 
@@ -33,6 +36,134 @@ afterEach(() => {
 
 // --------------------------------------------------------------------------------------------------------------------
 
+class FakeWindow {}
+
+// --------------------------------------------------------------------------------------------------------------------
+
+function givenDefaultChromiumConnectionForTesting(): void {
+    globalNS = new FakeWindow();
+
+    connection = new ChromiumConnection(
+        ChromiumConnection.DEFAULT_TIME_TO_LIVE,
+        ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
+        globalNS);
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("creates queues", () => {
+    givenDefaultChromiumConnectionForTesting();
+
+    // when creating a queue
+    const queue = connection.createQueue(QUEUE_NAME);
+
+    // then queue should be created
+    expect(queue).toBeDefined();
+    expect(queue.getName()).toEqual(QUEUE_NAME);
+
+    // tear down
+    connection.close();
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("creates topics", () => {
+    givenDefaultChromiumConnectionForTesting();
+
+    // when creating a topic
+    const topic = connection.createTopic(TOPIC_NAME);
+
+    // then topic should be created
+    expect(topic).toBeDefined();
+    expect(topic.getName()).toEqual(TOPIC_NAME);
+
+    // tear down
+    connection.close();
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("forwards messages from C++ to JS", () => {
+    givenDefaultChromiumConnectionForTesting();
+
+    // given some queue
+    const queue = connection.createQueue(QUEUE_NAME);
+
+    // when receiving message from C++
+    const expectedMessage = JsmsMessage.create(QUEUE_NAME, "sample body");
+    globalNS.onMessage(expectedMessage);
+
+    // then message should be forwarded to JS
+    const actualMessage = queue.dequeue();
+    expect(actualMessage).toBeDefined();
+    expect(actualMessage).toEqual(expectedMessage);
+
+    // tear down
+    connection.close();
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("forwards messages from JS to C++", async () => {
+    let actualMessage: JsmsMessage;
+    let expectedMessage: JsmsMessage;
+    let expectedSuccessResponse: JsmsMessage;
+
+    givenDefaultChromiumConnectionForTesting();
+
+    // given successful cefQuery function call
+    globalNS.cefQuery = (query: any) => {
+        actualMessage = JsmsMessage.fromString(query.request);
+        expectedSuccessResponse = JsmsMessage.createResponse(actualMessage, "response body");
+        query.onSuccess(expectedSuccessResponse.toString());
+    };
+
+    // given some queue
+    connection.createQueue(QUEUE_NAME);
+
+    // when sending message to C++
+    expectedMessage = JsmsMessage.create(QUEUE_NAME, "sample body");
+    const deferred = connection.send(expectedMessage);
+
+    // then message should be forwarded to C++
+    // @ts-ignore: "actualMessage possibly being undefined here" can be ignored for testing
+    expect(actualMessage).toEqual(expectedMessage);
+
+    // and the promise should be resolved
+    // @ts-ignore: "expectedSuccessResponse possibly being undefined here" can be ignored for testing
+    await expect(deferred.promise).resolves.toEqual(expectedSuccessResponse);
+
+    // tear down
+    connection.close();
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("rejects the promise on failure", async () => {
+    let actualMessage: JsmsMessage;
+    let expectedMessage: JsmsMessage;
+
+    givenDefaultChromiumConnectionForTesting();
+
+    // given failing cefQuery function call
+    globalNS.cefQuery = (query: any) => {
+        actualMessage = JsmsMessage.fromString(query.request);
+        query.onFailure(404, expectedErrorMessage);
+    };
+
+    // when sending message to C++
+    expectedMessage = JsmsMessage.create(QUEUE_NAME, "sample body");
+    const deferred = connection.send(expectedMessage);
+
+    // then promise should be rejected
+    await expect(deferred.promise).rejects.toEqual(expectedErrorMessage);
+
+    // tear down
+    connection.close();
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
 test("rejects if CEF message router isn't available after max retries", async () => {
     const windowWithoutMessageRouter = {};
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
@@ -42,7 +173,7 @@ test("rejects if CEF message router isn't available after max retries", async ()
     messageService.createQueue(QUEUE_NAME, connection);
 
     const deferred = messageService.send(QUEUE_NAME, expectedRequestBody);
-    deferred.catch(reason => {
+    deferred.catch(() => {
        // handle error here
     });
 
@@ -107,7 +238,7 @@ class FakeCefMessageRouter {
 test("a ChromiumConnection queue receiver can fetch a message even when it's running before the client sends the message", async () => {
     const expectedMessageBody = { test: "foo" };
 
-    const globalNS = new FakeCefMessageRouter(0, 0);
+    globalNS = new FakeCefMessageRouter(0, 0);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -130,7 +261,7 @@ test("a ChromiumConnection queue receiver can fetch a message even when it's run
 test("a ChromiumConnection queue receiver can fetch a message even when it wasn't running when the client sent the message", async () => {
     const expectedMessageBody = { test: "foo" };
 
-    const globalNS = new FakeCefMessageRouter(0, 0);
+    globalNS = new FakeCefMessageRouter(0, 0);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -156,7 +287,7 @@ test("a topic message is published to all subscribers of a ChromiumConnection to
     const expectedMessageBody = { test: "foo" };
     let receivedCount = 0;
 
-    const globalNS = new FakeCefMessageRouter(0, 0);
+    globalNS = new FakeCefMessageRouter(0, 0);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -184,7 +315,7 @@ test("a topic message is published to all subscribers of a ChromiumConnection to
 test("a ChromiumConnection catches exceptions inside onMessage callback", async () => {
     let exceptionWasThrown = false;
 
-    const globalNS = new FakeCefMessageRouter(0, 0);
+    globalNS = new FakeCefMessageRouter(0, 0);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -225,7 +356,7 @@ class FakeSimpleRespondingCefMessageRouter {
 // --------------------------------------------------------------------------------------------------------------------
 
 test("ChromiumConnection supports simple asynchronous request/reply chaining with deferreds", async () => {
-    const globalNS = new FakeSimpleRespondingCefMessageRouter();
+    globalNS = new FakeSimpleRespondingCefMessageRouter();
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -247,7 +378,7 @@ test("ChromiumConnection supports simple asynchronous request/reply chaining wit
 
 test("ChromiumConnection supports immediate client handshake", async () => {
 
-    const globalNS = new FakeCefMessageRouter(0, 0);
+    globalNS = new FakeCefMessageRouter(0, 0);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -265,7 +396,7 @@ test("ChromiumConnection supports immediate client handshake", async () => {
 // --------------------------------------------------------------------------------------------------------------------
 
 test("ChromiumConnection retries failed handshake inits", async () => {
-    const globalNS = new FakeCefMessageRouter(5, 0);
+    globalNS = new FakeCefMessageRouter(5, 0);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -282,7 +413,7 @@ test("ChromiumConnection retries failed handshake inits", async () => {
 // --------------------------------------------------------------------------------------------------------------------
 
 test("ChromiumConnection retries failed acknowledges of server-ready messages", async () => {
-    const globalNS = new FakeCefMessageRouter(0, 5);
+    globalNS = new FakeCefMessageRouter(0, 5);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -299,7 +430,7 @@ test("ChromiumConnection retries failed acknowledges of server-ready messages", 
 // --------------------------------------------------------------------------------------------------------------------
 
 test("ChromiumConnection retries failed handshake inits and failed acknowledges of server-ready messages", async () => {
-    const globalNS = new FakeCefMessageRouter(5, 5);
+    globalNS = new FakeCefMessageRouter(5, 5);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -318,7 +449,7 @@ test("ChromiumConnection retries failed handshake inits and failed acknowledges 
 test("ChromiumConnection retries failed handshake inits and failed acknowledges of server-ready messages without debug logging", async () => {
     getLogger("[CHROMIUM]").level = "info";
 
-    const globalNS = new FakeCefMessageRouter(5, 5);
+    globalNS = new FakeCefMessageRouter(5, 5);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -337,7 +468,7 @@ test("ChromiumConnection retries failed handshake inits and failed acknowledges 
 test("ChromiumConnection rejects failed handshake inits after max retries", async () => {
     const RETRY_COUNT = 3;
 
-    const globalNS = new FakeCefMessageRouter(5, 0);
+    globalNS = new FakeCefMessageRouter(5, 0);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE, RETRY_COUNT, globalNS);
     messageService.createQueue(QUEUE_NAME, connection);
 
@@ -354,7 +485,7 @@ test("ChromiumConnection rejects failed handshake inits after max retries", asyn
 test("ChromiumConnection rejects failed server-ready acks after max retries", async () => {
     const RETRY_COUNT = 3;
 
-    const globalNS = new FakeCefMessageRouter(0, 5);
+    globalNS = new FakeCefMessageRouter(0, 5);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE, RETRY_COUNT, globalNS);
     messageService.createQueue(QUEUE_NAME, connection);
 
@@ -391,7 +522,7 @@ class FakeSuccessCallbackCallingCefMessageRouter extends FakeCefMessageRouter {
 // --------------------------------------------------------------------------------------------------------------------
 
 test("calls onSuccess callback without delay", async () => {
-    const globalNS = new FakeSuccessCallbackCallingCefMessageRouter(false);
+    globalNS = new FakeSuccessCallbackCallingCefMessageRouter(false);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -411,7 +542,7 @@ test("calls onSuccess callback without delay", async () => {
 // --------------------------------------------------------------------------------------------------------------------
 
 test("calls onSuccess callback with delay", async () => {
-    const globalNS = new FakeSuccessCallbackCallingCefMessageRouter(true);
+    globalNS = new FakeSuccessCallbackCallingCefMessageRouter(true);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -451,7 +582,7 @@ class FakeFailureCallbackCallingCefMessageRouter extends FakeCefMessageRouter {
 // --------------------------------------------------------------------------------------------------------------------
 
 test("calls onFailure callback without delay", async () => {
-    const globalNS = new FakeFailureCallbackCallingCefMessageRouter(false);
+    globalNS = new FakeFailureCallbackCallingCefMessageRouter(false);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
@@ -471,7 +602,7 @@ test("calls onFailure callback without delay", async () => {
 // --------------------------------------------------------------------------------------------------------------------
 
 test("calls onFailure callback with delay", async () => {
-    const globalNS = new FakeFailureCallbackCallingCefMessageRouter(true);
+    globalNS = new FakeFailureCallbackCallingCefMessageRouter(true);
     connection = new ChromiumConnection(DEFAULT_TIME_TO_LIVE,
         ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
         globalNS);
