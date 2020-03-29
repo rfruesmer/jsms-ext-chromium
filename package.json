@@ -58,7 +58,7 @@
     "typescript": "^3.8.3"
   },
   "peerDependencies": {
-    "jsms": "1.0.10"
+    "jsms": ">=1.0.11"
   },
   "dependencies": {
     "@log4js-node/log4js-api": "^1.0.2",
