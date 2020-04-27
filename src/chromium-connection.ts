@@ -151,7 +151,14 @@ export class ChromiumConnection extends JsmsConnection {
     public sendHandshake(): JsmsDeferred<JsmsMessage> {
         this.currentHandshakeRetries = 0;
         const outerDeferred = new JsmsDeferred<JsmsMessage>();
-        this.sendHandshakeInternal(outerDeferred);
+
+        try {
+            this.sendHandshakeInternal(outerDeferred);
+        }
+        catch (e) {
+            outerDeferred.reject(e);
+        }
+
         return outerDeferred;
     }
 
