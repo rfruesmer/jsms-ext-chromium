@@ -499,6 +499,21 @@ test("ChromiumConnection rejects failed server-ready acks after max retries", as
 
 // --------------------------------------------------------------------------------------------------------------------
 
+test("ChromiumConnection rejects handshake if CEF isn't present", async () => {
+    globalNS = {};
+    connection = new ChromiumConnection(
+        ChromiumConnection.DEFAULT_TIME_TO_LIVE,
+        ChromiumConnection.DEFAULT_HANDSHAKE_RETRY_COUNT,
+        globalNS);
+    messageService.createQueue(QUEUE_NAME, connection);
+
+    const handshakeDeferred = connection.sendHandshake();
+
+    await expect(handshakeDeferred.promise).rejects.toBeDefined();
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
 class FakeSuccessCallbackCallingCefMessageRouter extends FakeCefMessageRouter {
 
     constructor(private delayed: boolean) {
@@ -637,3 +652,5 @@ test("instantiation without arguments doesn't throw", async () => {
 
     expect(exceptionWasThrown).toBeFalsy();
 });
+
+// --------------------------------------------------------------------------------------------------------------------
