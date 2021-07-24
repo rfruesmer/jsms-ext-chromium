@@ -104,6 +104,72 @@ test("forwards messages from C++ to JS", () => {
 
 // --------------------------------------------------------------------------------------------------------------------
 
+test("a queue receiver can chain a 'reply-then' when it's running before the message is send", async () => {
+    const messageBody = { test: "foo" };
+    let actualResponse = JsmsMessage.create("");
+
+    givenDefaultChromiumConnectionForTesting();
+
+    // given cefQuery function
+    globalNS.cefQuery = (query: any) => {
+        actualResponse = JsmsMessage.fromString(query.request);
+    };
+
+    // given some queue
+    messageService.createQueue(QUEUE_NAME, connection);
+
+    // given a receiver is already running and will be replying to a message
+    messageService.receive(QUEUE_NAME)
+        .then((message: JsmsMessage) => {
+            return expectedResponseBody;
+        });
+
+    // when the message is send and a response is awaited
+    const message = JsmsMessage.create(QUEUE_NAME, messageBody);
+    const deferredResponse = globalNS.onMessage(message);
+    await deferredResponse.promise;
+
+    // then the expected response should be delivered
+    expect(actualResponse.header.destination).toEqual(message.header.destination);
+    expect(actualResponse.header.correlationID).toEqual(message.header.correlationID);
+    expect(actualResponse.body).toEqual(expectedResponseBody);
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("a queue receiver can send a response when the message is sent before the receiver is running", async () => {
+    const messageBody = { test: "foo" };
+    let actualResponse = JsmsMessage.create("");
+
+    givenDefaultChromiumConnectionForTesting();
+
+    // given cefQuery function
+    globalNS.cefQuery = (query: any) => {
+        actualResponse = JsmsMessage.fromString(query.request);
+    };
+
+    // given some queue
+    messageService.createQueue(QUEUE_NAME, connection);
+
+    // given the message is sent before the receiver is running
+    const message = JsmsMessage.create(QUEUE_NAME, messageBody);
+    const deferredResponse = globalNS.onMessage(message);
+
+    // when the receiver connects and will be replying to a message
+    messageService.receive(QUEUE_NAME)
+        .then((message: JsmsMessage) => {
+            return expectedResponseBody;
+        });
+
+    // then the sender should have received the response
+    await deferredResponse.promise;
+    expect(actualResponse.header.destination).toEqual(message.header.destination);
+    expect(actualResponse.header.correlationID).toEqual(message.header.correlationID);
+    expect(actualResponse.body).toEqual(expectedResponseBody);
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
 test("forwards messages from JS to C++", async () => {
     let actualRequest = JsmsMessage.create("", "");
     const expectedRequest = JsmsMessage.create(QUEUE_NAME, "sample body");
