@@ -44,11 +44,7 @@ export class ChromiumConnection extends JsmsConnection {
 
         this.globalNS.onMessage = (json: any) => {
             try {
-                const deferredResponse = this.onMessage(JsmsMessage.fromJSON(json));
-                deferredResponse.then((response: JsmsMessage) => {
-                    this.send(response);
-                });
-                return deferredResponse;
+                this.onMessage(JsmsMessage.fromJSON(json));
             }
             catch (e) {
                 this.logger.error(e);
@@ -56,19 +52,17 @@ export class ChromiumConnection extends JsmsConnection {
         };
     }
 
-    private onMessage(message: JsmsMessage): JsmsDeferred<JsmsMessage> {
+    private onMessage(message: JsmsMessage): void {
         const responseDeferred = this.responseDeferreds.get(message.header.correlationID);
         if (responseDeferred) {
             this.handleResponse(message, responseDeferred);
-            const deferredResponse = new JsmsDeferred<JsmsMessage>();
-            deferredResponse.resolve(message);
-            return deferredResponse;
         }
+        else {
+            const destination = this.getDestinationFor(message.header.destination);
+            const consumer = this.getConsumer(destination);
 
-        const destination = this.getDestinationFor(message.header.destination);
-        const consumer = this.getConsumer(destination);
-
-        return consumer.onMessage(message);
+            consumer.onMessage(message);
+        }
     }
 
     private handleResponse(response: JsmsMessage, responseDeferred: JsmsDeferred<JsmsMessage>): void {
