@@ -120,7 +120,7 @@ test("a queue receiver can chain a 'reply-then' when it's running before the mes
 
     // given a receiver is already running and will be replying to a message
     messageService.receive(QUEUE_NAME)
-        .then(() => {
+        .then((message: JsmsMessage) => {
             return expectedResponseBody;
         });
 
@@ -157,7 +157,7 @@ test("a queue receiver can send a response when the message is sent before the r
 
     // when the receiver connects and will be replying to a message
     messageService.receive(QUEUE_NAME)
-        .then(() => {
+        .then((message: JsmsMessage) => {
             return expectedResponseBody;
         });
 
