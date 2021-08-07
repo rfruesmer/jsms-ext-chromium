@@ -115,8 +115,8 @@ export class ChromiumConnection extends JsmsConnection {
             return this.sendFunction;
         }
 
-        if (this.isChromium()) {
-            this.initChromiumConnection();
+        if (this.isCEF()) {
+            this.initCEFConnection();
         }
         else if (this.isWebView2()) {
             this.initWebView2Connection();
@@ -128,14 +128,14 @@ export class ChromiumConnection extends JsmsConnection {
         return this.sendFunction;
     }
 
-    private isChromium(): boolean {
+    private isCEF(): boolean {
         return typeof this.globalNS.cefQuery === "function";
     }
 
-    private initChromiumConnection(): void {
+    private initCEFConnection(): void {
         this.sendFunction =
             (message: JsmsMessage, deferredResponse: JsmsDeferred<JsmsMessage>) =>
-                this.sendToChromium(message, deferredResponse);
+                this.sendToCEF(message, deferredResponse);
     }
 
     private isWebView2(): boolean {
@@ -189,7 +189,7 @@ export class ChromiumConnection extends JsmsConnection {
         this.responseDeferreds.delete(correlationID);
     }
 
-    private sendToChromium(message: JsmsMessage, deferredResponse: JsmsDeferred<JsmsMessage>): void {
+    private sendToCEF(message: JsmsMessage, deferredResponse: JsmsDeferred<JsmsMessage>): void {
         this.responseDeferreds.set(message.header.correlationID, deferredResponse);
 
         const cefQuery = {
