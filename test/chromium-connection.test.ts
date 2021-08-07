@@ -192,7 +192,7 @@ class FakeCefMessageRouter {
     public cefQuery(query: any): void {
         const request = JSON.parse(query.request) as JsmsMessage;
         if (request.header.destination
-                === ChromiumConnection.CEF_HANDSHAKE_INIT) {
+                === ChromiumConnection.HANDSHAKE_INIT) {
             if (this.currentHandshakeInitCount++ < this.desiredHandshakeInitFailCount) {
                 return;
             }
@@ -202,7 +202,7 @@ class FakeCefMessageRouter {
         }
 
         if (request.header.destination
-                === ChromiumConnection.CEF_HANDSHAKE_SERVER_READY) {
+                === ChromiumConnection.HANDSHAKE_SERVER_READY) {
             if (this.currentHandshakeServerReadyCount++ < this.desiredHandshakeServerReadyFailCount) {
                 return;
             }
@@ -213,7 +213,7 @@ class FakeCefMessageRouter {
     protected sendClientReady(request: JsmsMessage): void {
         setTimeout(() => {
             const response = JsmsMessage.create(
-                ChromiumConnection.CEF_HANDSHAKE_CLIENT_READY,
+                ChromiumConnection.HANDSHAKE_CLIENT_READY,
                 {},
                 DEFAULT_TIME_TO_LIVE,
                 request.header.correlationID);

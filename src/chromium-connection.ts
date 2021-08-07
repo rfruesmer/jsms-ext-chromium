@@ -18,15 +18,18 @@ function currentTimeMillis(): number {
     return new Date().getTime();
 }
 
+type SendFunction = (message: JsmsMessage, deferredResponse: JsmsDeferred<JsmsMessage>) => void;
+
 export class ChromiumConnection extends JsmsConnection {
-    public static readonly CEF_HANDSHAKE_INIT = "/cef/handshake/init";
-    public static readonly CEF_HANDSHAKE_SERVER_READY = "/cef/handshake/server/ready";
-    public static readonly CEF_HANDSHAKE_CLIENT_READY = "/cef/handshake/client/ready";
+    public static readonly HANDSHAKE_INIT = "/jsms-ext-chromium/handshake/init";
+    public static readonly HANDSHAKE_CLIENT_READY = "/jsms-ext-chromium/handshake/client/ready";
+    public static readonly HANDSHAKE_SERVER_READY = "/jsms-ext-chromium/handshake/server/ready";
     public static readonly DEFAULT_TIME_TO_LIVE: number = 1000;
     public static readonly DEFAULT_HANDSHAKE_RETRY_COUNT: number = 60;
     public static readonly DEFAULT_HANDSHAKE_RETRY_DELAY: number = 100;
 
     private readonly logger = getLogger("[CHROMIUM]");
+    private sendFunction: any = null;
     private responseDeferreds = new Map<string, JsmsDeferred<JsmsMessage>>();
     private currentHandshakeRetries: number = 0;
 
@@ -90,10 +93,6 @@ export class ChromiumConnection extends JsmsConnection {
     }
 
     public send(message: JsmsMessage): JsmsDeferred<JsmsMessage> {
-        if (typeof this.globalNS.cefQuery !== "function") {
-            throw new Error("CEF message router isn't available!");
-        }
-
         if (this.logger.isDebugEnabled()) {
             this.logger.debug("Sending request: \""
                 + message.header.destination + "\" ["
@@ -102,10 +101,92 @@ export class ChromiumConnection extends JsmsConnection {
         }
 
         const deferredResponse = new JsmsDeferred<JsmsMessage>();
-        this.sendToChromium(message, deferredResponse);
+
+        const sendFunction = this.getSendFunction();
+        sendFunction(message, deferredResponse);
+
         this.handleExpiration(message, deferredResponse);
 
         return deferredResponse;
+    }
+
+    private getSendFunction(): SendFunction {
+        if (this.sendFunction) {
+            return this.sendFunction;
+        }
+
+        if (this.isChromium()) {
+            this.initChromiumConnection();
+        }
+        else if (this.isWebView2()) {
+            this.initWebView2Connection();
+        }
+        else {
+            throw new Error("No messaging function available");
+        }
+
+        return this.sendFunction;
+    }
+
+    private isChromium(): boolean {
+        return typeof this.globalNS.cefQuery === "function";
+    }
+
+    private initChromiumConnection(): void {
+        this.sendFunction =
+            (message: JsmsMessage, deferredResponse: JsmsDeferred<JsmsMessage>) =>
+                this.sendToChromium(message, deferredResponse);
+    }
+
+    private isWebView2(): boolean {
+        return this.globalNS.chrome
+            && this.globalNS.chrome.webview
+            && typeof this.globalNS.chrome.webview.postMessage === "function";
+    }
+
+    private initWebView2Connection(): void {
+        this.sendFunction =
+            (message: JsmsMessage, deferredResponse: JsmsDeferred<JsmsMessage>) =>
+                this.sendToWebView2(message, deferredResponse);
+
+        this.globalNS.chrome.webview.addEventListener('message', (arg: any) => {
+            const envelope = arg.data;
+            const status = envelope.status;
+
+            if (status === 0) {
+                const response = JsmsMessage.fromJSON(envelope.response);
+                this.handleSuccessResponse(response);
+            }
+            else {
+                const request = JsmsMessage.fromJSON(envelope.request);
+                this.handleErrorResponse(
+                    request.header.destination,
+                    request.header.correlationID,
+                    envelope.errorCode,
+                    envelope.errorMessage);
+            }
+        });
+    }
+
+    private handleSuccessResponse(response: JsmsMessage): void {
+        const responseDeferred = this.responseDeferreds.get(response.header.correlationID);
+        responseDeferred?.resolve(response);
+        this.responseDeferreds.delete(response.header.correlationID);
+    }
+
+    private handleErrorResponse(
+            destination: string,
+            correlationID: string,
+            errorCode: number,
+            errorMessage: string): void {
+        this.logger.error("Native call failed for: "
+            + "\ndestination: " + destination
+            + "\nerror-code: " + errorCode
+            + "\nerror-message: " + errorMessage);
+
+        const responseDeferred = this.responseDeferreds.get(correlationID);
+        responseDeferred?.reject(errorMessage);
+        this.responseDeferreds.delete(correlationID);
     }
 
     private sendToChromium(message: JsmsMessage, deferredResponse: JsmsDeferred<JsmsMessage>): void {
@@ -114,22 +195,24 @@ export class ChromiumConnection extends JsmsConnection {
         const cefQuery = {
             request: message.toString(),
             persistent: false,
-            onSuccess: (response: string) => {
-                deferredResponse.resolve(JsmsMessage.fromString(response));
-                this.responseDeferreds.delete(message.header.correlationID);
+            onSuccess: (responseString: string) => {
+                this.handleSuccessResponse(JsmsMessage.fromString(responseString));
             },
             onFailure: (errorCode: number, errorMessage: string) => {
-                this.logger.error("cefQuery call failed for: "
-                    + "\ndestination: " + message.header.destination
-                    + "\nerror-code: " + errorCode
-                    + "\nerror-message: " + errorMessage);
-
-                deferredResponse.reject(errorMessage);
-                this.responseDeferreds.delete(message.header.correlationID);
+                this.handleErrorResponse(
+                    message.header.destination,
+                    message.header.correlationID,
+                    errorCode,
+                    errorMessage);
             }
         };
 
         this.globalNS.cefQuery(cefQuery);
+    }
+
+    private sendToWebView2(message: JsmsMessage, deferredResponse: JsmsDeferred<JsmsMessage>): void {
+        this.responseDeferreds.set(message.header.correlationID, deferredResponse);
+        this.globalNS.chrome.webview.postMessage(message.toString());
     }
 
     private handleExpiration(message: JsmsMessage, deferredResponse: JsmsDeferred<JsmsMessage>): void {
@@ -187,7 +270,7 @@ export class ChromiumConnection extends JsmsConnection {
 
     private sendHandshakeInit(): JsmsDeferred<JsmsMessage> {
         const initMessage = JsmsMessage.create(
-            ChromiumConnection.CEF_HANDSHAKE_INIT,
+            ChromiumConnection.HANDSHAKE_INIT,
             {},
             this.defaultTimeToLive);
 
@@ -203,7 +286,7 @@ export class ChromiumConnection extends JsmsConnection {
 
     private sendServerReady(): JsmsDeferred<JsmsMessage> {
         const serverReadyMessage = JsmsMessage.create(
-            ChromiumConnection.CEF_HANDSHAKE_SERVER_READY,
+            ChromiumConnection.HANDSHAKE_SERVER_READY,
             {},
             this.defaultTimeToLive);
 

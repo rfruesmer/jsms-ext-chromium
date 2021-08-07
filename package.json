@@ -5,6 +5,7 @@
   "scripts": {
     "test": "jest --collect-coverage",
     "build": "npm run clean && npm run compile && npm run lint && npm run test && npm run prepare-dist",
+    "build-without-checks": "npm run clean && npm run compile && npm run prepare-dist",
     "clean": "rimraf ./dist/**/*",
     "compile": "tsc",
     "doc": "rimraf ./doc && typedoc --exclude \"+(node_modules|test|index.d.ts)\" --excludeNotExported --excludePrivate --excludeProtected --module commonjs --target ES6  --out ./doc .",
@@ -43,26 +44,26 @@
   },
   "homepage": "https://github.com/rfruesmer/jsms-ext-chromium#readme",
   "devDependencies": {
-    "@types/jest": "^25.2.1",
+    "@types/jest": "^26.0.24",
     "cp-cli": "^2.0.0",
-    "jest": "^25.5.3",
-    "jsms": "^1.0.13",
-    "log4js": "^6.2.1",
+    "jest": "^27.0.6",
+    "jsms": "^1.0.16",
+    "log4js": "^6.3.0",
     "move-cli": "^1.2.1",
-    "prettier": "^2.0.5",
+    "prettier": "^2.3.2",
     "rimraf": "^3.0.2",
-    "ts-jest": "^25.4.0",
+    "ts-jest": "^27.0.4",
     "tslint": "^6.1.2",
     "tslint-config-prettier": "^1.18.0",
     "tslint-plugin-prettier": "^2.3.0",
-    "typescript": "^3.8.3"
+    "typescript": "^4.3.5"
   },
   "peerDependencies": {
-    "jsms": ">=1.0.13"
+    "jsms": ">=1.0.16"
   },
   "dependencies": {
     "@log4js-node/log4js-api": "^1.0.2",
-    "uuid": "^8.0.0"
+    "uuid": "^8.3.2"
   },
   "files": [
     "dist/**/*"
