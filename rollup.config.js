@@ -6,7 +6,7 @@ export default [
         input: "index.js",
         external: ["jsms", "@log4js-node/log4js-api"],
         output: {
-            name: "jsms",
+            name: "jsms_ext_chromium",
             file: pkg.browser,
             format: "umd"
         }
