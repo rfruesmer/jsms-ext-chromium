@@ -64,7 +64,11 @@ export class ChromiumConnection extends JsmsConnection {
             const destination = this.getDestinationFor(message.header.destination);
             const consumer = this.getConsumer(destination);
 
-            consumer.onMessage(message);
+            consumer.onMessage(message).then(response => {
+                if (Object.keys(response.body).length > 0) {
+                    this.send(response);
+                }
+            });
         }
     }
 

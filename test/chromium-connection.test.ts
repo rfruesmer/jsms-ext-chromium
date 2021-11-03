@@ -1,6 +1,16 @@
-import { JsmsService, JsmsMessage } from "jsms";
+import {JsmsService, JsmsMessage, JsmsDeferred} from "jsms";
 import { ChromiumConnection } from "../src/chromium-connection";
 import { getLogger } from "@log4js-node/log4js-api";
+
+type WebView2StatusCallbackArgs = {
+    data: {
+        status: number,
+        errorCode: number,
+        errorMessage: string,
+        request: JsmsMessage|null,
+        response: JsmsMessage|null,
+    }
+};
 
 const QUEUE_NAME = "/some/destination";
 const TOPIC_NAME = "/some/topic";
@@ -104,7 +114,7 @@ test("forwards messages from C++ to JS", () => {
 
 // --------------------------------------------------------------------------------------------------------------------
 
-test("forwards messages from JS to C++", async () => {
+test("forwards messages from JS to C++ (CEF)", async () => {
     let actualRequest = JsmsMessage.create("", "");
     const expectedRequest = JsmsMessage.create(QUEUE_NAME, "sample body");
     const expectedResponse = JsmsMessage.createResponse(expectedRequest, "response body");
@@ -651,6 +661,170 @@ test("instantiation without arguments doesn't throw", async () => {
     }
 
     expect(exceptionWasThrown).toBeFalsy();
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("supports sending responses back to C++", (done) => {
+    givenDefaultChromiumConnectionForTesting();
+
+    // given some queue
+    messageService.createQueue(QUEUE_NAME, connection);
+
+    // given some receiver who returns a response
+    messageService.receive(QUEUE_NAME).then(() => {
+        return expectedResponseBody;
+    });
+
+    // when receiving message from C++
+    const expectedMessage = JsmsMessage.create(QUEUE_NAME, "sample body");
+    globalNS.onMessage(expectedMessage);
+
+    // then response should be sent back
+    globalNS.cefQuery = (query: any) => {
+        const actualResponse = JsmsMessage.fromString(query.request);
+        expect(actualResponse.body).toEqual(expectedResponseBody);
+
+        // tear down
+        connection.close();
+        done();
+    };
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("forwards messages from JS to C++ (WebView2)", async () => {
+    let actualRequest = JsmsMessage.create("", "");
+    const expectedRequest = JsmsMessage.create(QUEUE_NAME, "sample body");
+    const expectedResponse = JsmsMessage.createResponse(expectedRequest, "response body");
+    const responseDeferred = new JsmsDeferred<JsmsMessage>();
+    let eventListenerRegistered = false;
+
+    givenDefaultChromiumConnectionForTesting();
+
+    // expect successful WebView2 function call
+    globalNS.chrome = {};
+    globalNS.chrome.webview = {};
+    globalNS.chrome.webview.addEventListener = (eventType: string, fn: (arg: any) => void) => {
+        eventListenerRegistered = true;
+    };
+
+    globalNS.chrome.webview.postMessage = (messageAsString: string) => {
+        actualRequest = JsmsMessage.fromString(messageAsString);
+        responseDeferred.resolve(expectedResponse);
+    };
+
+    // given some queue
+    connection.createQueue(QUEUE_NAME);
+
+    // when sending message to C++
+    connection.send(expectedRequest);
+
+    // then event listener should be registered
+    expect(eventListenerRegistered).toEqual(true);
+
+    // then message should be forwarded to C++
+    expect(actualRequest).toEqual(expectedRequest);
+
+    // and the promise should be resolved with the expected response
+    const actualResponse = await responseDeferred.promise;
+    expect(actualResponse.header.destination).toEqual(expectedResponse.header.destination);
+    expect(actualResponse.header.correlationID).toEqual(expectedResponse.header.correlationID);
+    expect(actualResponse.body).toEqual(expectedResponse.body);
+
+    // tear down
+    connection.close();
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("processes success response callbacks (WebView2)", async () => {
+    const expectedRequest = JsmsMessage.create(QUEUE_NAME, "sample body");
+    const expectedResponse = JsmsMessage.createResponse(expectedRequest, "response body");
+    let responseDeferred: JsmsDeferred<JsmsMessage> | null;
+    let responseCallbackListener: (arg: any) => void | null;
+
+    givenDefaultChromiumConnectionForTesting();
+
+    // expect successful WebView2 function call
+    globalNS.chrome = {};
+    globalNS.chrome.webview = {};
+    globalNS.chrome.webview.postMessage = (messageAsString: string) => { /** do nothing */ };
+    globalNS.chrome.webview.addEventListener = (eventType: string, fn: (arg: any) => void) => {
+        responseCallbackListener = fn;
+    };
+
+    // given some queue
+    connection.createQueue(QUEUE_NAME);
+
+    // when sending message to C++
+    responseDeferred = connection.send(expectedRequest);
+
+    const callbackArgs: WebView2StatusCallbackArgs = {
+        data: {
+            status: 0,
+            errorCode: 0,
+            errorMessage: "",
+            request: null,
+            response: expectedResponse
+        }
+    };
+
+    // @ts-ignore
+    expect(responseCallbackListener).toBeTruthy();
+
+    // @ts-ignore
+    responseCallbackListener(callbackArgs);
+
+    await expect(responseDeferred.promise).resolves.toEqual(expectedResponse);
+
+    // tear down
+    connection.close();
+});
+
+// --------------------------------------------------------------------------------------------------------------------
+
+test("processes failure response callbacks (WebView2)", async () => {
+    const expectedRequest = JsmsMessage.create(QUEUE_NAME, "sample body");
+    let responseDeferred: JsmsDeferred<JsmsMessage> | null;
+    let responseCallbackListener: (arg: any) => void | null;
+
+    givenDefaultChromiumConnectionForTesting();
+
+    // expect successful WebView2 function call
+    globalNS.chrome = {};
+    globalNS.chrome.webview = {};
+    globalNS.chrome.webview.postMessage = () => { /** do nothing */ };
+    globalNS.chrome.webview.addEventListener = (eventType: string, fn: (arg: any) => void) => {
+        responseCallbackListener = fn;
+    };
+
+    // given some queue
+    connection.createQueue(QUEUE_NAME);
+
+    // when sending message to C++
+    responseDeferred = connection.send(expectedRequest);
+
+    const callbackArgs: WebView2StatusCallbackArgs = {
+        data: {
+            status: 1,
+            errorCode: 42,
+            errorMessage: "fatal error",
+            request: expectedRequest,
+            response: null
+        }
+    };
+
+    // @ts-ignore
+    expect(responseCallbackListener).toBeTruthy();
+
+    // @ts-ignore
+    responseCallbackListener(callbackArgs);
+
+    await expect(responseDeferred.promise).rejects.toEqual(callbackArgs.data.errorMessage);
+
+    // tear down
+    connection.close();
 });
 
 // --------------------------------------------------------------------------------------------------------------------
