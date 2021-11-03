@@ -44,20 +44,20 @@
   },
   "homepage": "https://github.com/rfruesmer/jsms-ext-chromium#readme",
   "devDependencies": {
-    "@types/jest": "^26.0.24",
+    "@types/jest": "^27.0.2",
     "cp-cli": "^2.0.0",
-    "jest": "^27.0.6",
+    "jest": "^27.3.1",
     "jsms": "^1.0.16",
     "log4js": "^6.3.0",
-    "move-cli": "^1.2.1",
-    "prettier": "^2.3.2",
+    "move-cli": "^2.0.0",
+    "prettier": "^2.4.1",
     "rimraf": "^3.0.2",
-    "rollup": "^2.56.2",
-    "ts-jest": "^27.0.4",
+    "rollup": "^2.59.0",
+    "ts-jest": "^27.0.7",
     "tslint": "^6.1.2",
     "tslint-config-prettier": "^1.18.0",
     "tslint-plugin-prettier": "^2.3.0",
-    "typescript": "^4.3.5"
+    "typescript": "^4.4.4"
   },
   "peerDependencies": {
     "jsms": ">=1.0.16"
