@@ -1,6 +1,6 @@
 {
   "name": "jsms-ext-chromium",
-  "version": "2.0.0-alpha.0",
+  "version": "2.0.1",
   "description": "JSMS extension for integration of Chromium Embedded Framework (CEF) clients.",
   "scripts": {
     "test": "jest --collect-coverage",
